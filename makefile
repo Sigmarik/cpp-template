@@ -2,20 +2,21 @@ PYTHON = python3
 CC = g++
 PROFILER = valgrind
 
-CPP_BASE_FLAGS = -I./ -I./lib/ -ggdb3 -std=c++2a -O2 -pie -pthread					\
+CPP_BASE_FLAGS = -I./ -I./lib/ -ggdb3 -std=c++2a -Ofast -pie -pthread				\
 -Wall -Wextra -Weffc++				 	 											\
 -Waggressive-loop-optimizations -Wc++14-compat -Wmissing-declarations				\
 -Wcast-align -Wchar-subscripts -Wconditionally-supported							\
 -Wconversion -Wctor-dtor-privacy -Wempty-body -Wformat-nonliteral					\
--Wformat-security -Wformat-signedness -Wformat=2 -Winline -Wlogical-op				\
+-Wformat-security -Wformat-signedness -Wformat=2 -Wlogical-op						\
 -Wnon-virtual-dtor -Wopenmp-simd -Woverloaded-virtual -Wpacked -Wpointer-arith		\
 -Winit-self -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo				\
 -Wstrict-null-sentinel -Wstrict-overflow=2 -Wsuggest-attribute=noreturn				\
--Wsuggest-final-methods -Wsuggest-final-types -Wsuggest-override -Wswitch-default	\
--Wsync-nand -Wundef -Wunreachable-code -Wunused -Wuseless-cast						\
+-Wsuggest-override -Wswitch-default													\
+-Wsync-nand -Wundef -Wunreachable-code -Wuseless-cast								\
 -Wvariadic-macros -Wno-literal-suffix -Wno-missing-field-initializers				\
 -Wno-narrowing -Wno-old-style-cast -Wno-varargs -Wstack-protector					\
--Wstack-usage=8192
+-Wstack-usage=8192 -Wno-unused-parameter -Wno-deprecated-declarations				\
+-Wno-unused-variable
 
 CPP_SANITIZER_FLAGS = -fcheck-new 													\
 -fsized-deallocation -fstack-protector -fstrict-overflow -flto-odr-type-merging		\
@@ -44,8 +45,10 @@ BLD_SUFFIX = _v$(BLD_VERSION)_$(BLD_TYPE)_$(BLD_PLATFORM)$(BLD_FORMAT)
 
 BUILD_ERRLOG_FNAME = latest_build_err.log
 
-LIB_OBJECTS = lib/logger/debug.o		\
-			  lib/logger/logger.o		\
+SFML_ARGS = -lsfml-graphics -lsfml-window -lsfml-system
+
+LIB_OBJECTS = lib/logger/debug.o			\
+			  lib/logger/logger.o			\
 			  lib/hash/murmur.o
 
 MAIN_NAME = main
@@ -53,17 +56,17 @@ MAIN_BLD_FULL_NAME = $(MAIN_NAME)$(BLD_SUFFIX)
 
 MAIN_MAIN = src/main.cpp
 
-MAIN_OBJECTS = $(LIB_OBJECTS)	\
-	src/utils/main_utils.o		\
-	src/utils/common_utils.o	\
+MAIN_OBJECTS = $(LIB_OBJECTS)							\
+	src/utils/main_utils.o								\
+	src/utils/common_utils.o							\
 	src/io/main_io.o
 
 MAIN_DEPS = $(addprefix $(PROJ_DIR)/, $(MAIN_OBJECTS))
 
 $(BLD_FOLDER)/$(MAIN_BLD_FULL_NAME): asset $(MAIN_MAIN) $(MAIN_DEPS)
 	@mkdir -p $(BLD_FOLDER)
-	@echo Assembling files $(MAIN_MAIN) $(MAIN_OBJECTS)
-	@$(CC) $(MAIN_MAIN) $(MAIN_DEPS) $(CPPFLAGS) -o $(BLD_FOLDER)/$(MAIN_BLD_FULL_NAME)
+	@echo Assembling files $(MAIN_MAIN) $(MAIN_DEPS) $(SFML_ARGS)
+	@$(CC) $(MAIN_MAIN) $(MAIN_OBJECTS) $(CPPFLAGS) $(SFML_ARGS) -o $(BLD_FOLDER)/$(MAIN_BLD_FULL_NAME)
 
 TEST_MAIN = ./gtest/gtest.o
 LIBGTEST_MAIN = /usr/lib/libgtest_main.a
@@ -73,14 +76,14 @@ test: $(TEST_MAIN) $(MAIN_DEPS)
 	@mkdir -p $(BLD_FOLDER)
 	@mkdir -p $(BLD_FOLDER)/$(ASSET_FOLDER)
 	@cp -r gtest/assets/. $(BLD_FOLDER)/$(ASSET_FOLDER)
-	@$(CC)  $(TEST_MAIN) $(MAIN_DEPS) $(LIBGTEST_MAIN) $(LIBGTEST) $(CPPFLAGS) -o $(BLD_FOLDER)/test_$(MAIN_BLD_FULL_NAME)
+	@$(CC)  $(TEST_MAIN) $(MAIN_DEPS) $(LIBGTEST_MAIN) $(LIBGTEST) $(SFML_ARGS) $(CPPFLAGS) -o $(BLD_FOLDER)/test_$(MAIN_BLD_FULL_NAME)
 	@cd $(BLD_FOLDER) && exec ./test_$(MAIN_BLD_FULL_NAME)
 
 run: asset $(BLD_FOLDER)/$(MAIN_BLD_FULL_NAME)
 	@cd $(BLD_FOLDER) && exec ./$(MAIN_BLD_FULL_NAME) $(ARGS)
 
 debug: asset $(BLD_FOLDER)/$(MAIN_BLD_FULL_NAME)
-	@cd $(BLD_FOLDER) && radare2 -d ./$(MAIN_BLD_FULL_NAME) $(ARGS)
+	@cd $(BLD_FOLDER) && gdb ./$(MAIN_BLD_FULL_NAME) $(ARGS)
 
 install-gtest:
 	sudo apt-get install libgtest-dev
@@ -96,11 +99,13 @@ asset:
 
 %.o: %.cpp
 	@echo Building file $^
+	@mkdir -p $(LOGS_FOLDER)
 	@$(CC) $(CPPFLAGS) -c $^ -o $@ > $(BUILD_LOG_NAME)
 
 LST_NAME = asm_listing.log
 %.o: %.s
 	@echo Building assembly file $^
+	@mkdir -p $(LOGS_FOLDER)
 	@nasm -f elf64 -l $(LST_NAME) $^ -o $@ > $(BUILD_LOG_NAME)
 
 clean:
@@ -114,3 +119,6 @@ rmbld:
 rm:
 	@make clean
 	@make rmbld
+
+doxy:
+	@doxygen Doxyfile
